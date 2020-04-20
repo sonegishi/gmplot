@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import base64
 import json
 import math
 import os
@@ -300,8 +301,9 @@ class GoogleMapPlotter(object):
             self.write_polyline(f, line, settings)
 
     def write_points(self, f):
+        color_cache = set()
         for point in self.points:
-            self.write_point(f, point[0], point[1], point[2], point[3])
+            self.write_point(f, point[0], point[1], point[2], point[3], color_cache)
 
     def write_circles(self, f):
         for circle, settings in self.circles:
@@ -332,15 +334,25 @@ class GoogleMapPlotter(object):
             '\t\tvar map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);\n')
         f.write('\n')
 
-    def write_point(self, f, lat, lon, color, title):
+    def write_point(self, f, lat, lon, color, title, color_cache):
+        marker_name = 'marker_%s' % color
+
+        # If a color icon hasn't been loaded before, convert it to base64, then embed it in the script:
+        if color not in color_cache:
+            base64_icon = base64.b64encode(open(self.coloricon % color, 'rb').read()).decode()
+            f.write('\t\tvar %s = new google.maps.MarkerImage(\'data:image/png;base64,%s\');\n' %
+                (marker_name, base64_icon))
+            f.write('\n')
+            color_cache.add(color)
+
         f.write('\t\tvar latlng = new google.maps.LatLng(%f, %f);\n' %
                 (lat, lon))
         f.write('\t\tvar img = new google.maps.MarkerImage(\'%s\');\n' %
                 (self.coloricon % color))
         f.write('\t\tvar marker = new google.maps.Marker({\n')
-        f.write('\t\ttitle: "%s",\n' % title)
-        f.write('\t\ticon: img,\n')
-        f.write('\t\tposition: latlng\n')
+        f.write('\t\t\ttitle: "%s",\n' % title)
+        f.write('\t\t\ticon: %s,\n' % marker_name)
+        f.write('\t\t\tposition: latlng\n')
         f.write('\t\t});\n')
         f.write('\t\tmarker.setMap(map);\n')
         f.write('\n')
